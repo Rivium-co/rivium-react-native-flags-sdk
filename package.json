@@ -1,0 +1,32 @@
+{
+  "name": "@rivium/flags-react-native",
+  "version": "0.1.0",
+  "description": "Rivium Feature Flags SDK for React Native - Client-side feature flag management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["feature-flags", "rivium", "react-native"],
+  "author": "Rivium",
+  "license": "MIT",
+  "homepage": "https://rivium.co",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rivium-co/rivium-flags-react-native-sdk"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.70.0",
+    "@react-native-async-storage/async-storage": ">=1.19.0",
+    "@react-native-community/netinfo": ">=9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0"
+  }
+}

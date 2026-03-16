@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Example app
+example-app/node_modules/
+example-app/ios/build/
+example-app/ios/Pods/
+example-app/ios/Podfile.lock
+example-app/ios/*.xcworkspace/
+example-app/android/build/
+example-app/android/.gradle/
+example-app/android/app/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Claude
+.claude/
+
+# Environment
+.env
+.env.local
+.env*.local
