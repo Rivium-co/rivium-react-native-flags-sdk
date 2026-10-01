@@ -15,8 +15,7 @@
     "@react-native/new-app-screen": "0.84.1",
     "react-native-safe-area-context": "^5.5.2",
     "@rivium/flags-react-native": "file:..",
-    "@react-native-async-storage/async-storage": "^2.0.0",
-    "@react-native-community/netinfo": "^11.0.0"
+    "@react-native-async-storage/async-storage": "^2.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

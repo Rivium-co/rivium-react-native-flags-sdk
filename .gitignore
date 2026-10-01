@@ -29,3 +29,6 @@ example-app/android/app/build/
 .env
 .env.local
 .env*.local
+
+# Test build
+test-dist/

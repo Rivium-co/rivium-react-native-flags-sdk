@@ -1,121 +1,119 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { RiviumFlags } from './rivium-flags';
-import { RiviumFlagsConfig, FeatureFlag, FlagEvalResult } from './types';
+import type { FlagDetail, RiviumFlagsConfig } from './types';
 
-interface RiviumFlagsContextValue {
-  isEnabled: (flagKey: string, defaultValue?: boolean) => boolean;
-  getValue: (flagKey: string, defaultValue?: any) => any;
-  evaluate: (flagKey: string) => FlagEvalResult;
-  getAll: () => FeatureFlag[];
-  setUserId: (userId: string) => Promise<void>;
-  getUserId: () => string | undefined;
-  setUserAttributes: (attributes: Record<string, any>) => void;
-  refresh: () => Promise<void>;
-  isLoading: boolean;
-  isReady: boolean;
-}
+const RiviumFlagsContext = createContext<RiviumFlags | null>(null);
 
-const RiviumFlagsContext = createContext<RiviumFlagsContextValue | null>(null);
-
-interface RiviumFlagsProviderProps {
-  config: RiviumFlagsConfig;
+export interface RiviumFlagsProviderProps {
+  /** Creates and initialises a client for you… */
+  config?: RiviumFlagsConfig;
+  /** …or pass one you created (and called `init()` on) yourself. */
+  client?: RiviumFlags;
   children: React.ReactNode;
 }
 
 /**
- * RiviumFlagsProvider - Wraps your React Native app with feature flag context
+ * Provides a Rivium Flags client to the tree. Components using the hooks re-render when results change.
  *
- * @example
  * ```tsx
- * import { RiviumFlagsProvider } from '@rivium/flags-react-native';
- *
- * export default function App() {
- *   return (
- *     <RiviumFlagsProvider config={{ apiKey: 'rv_live_xxx' }}>
- *       <MainApp />
- *     </RiviumFlagsProvider>
- *   );
- * }
+ * <RiviumFlagsProvider config={{ apiKey: 'rv_live_xxx', environment: 'production' }}>
+ *   <App />
+ * </RiviumFlagsProvider>
  * ```
  */
-export function RiviumFlagsProvider({ config, children }: RiviumFlagsProviderProps) {
-  const [client] = useState(() => new RiviumFlags(config));
-  const [isLoading, setIsLoading] = useState(true);
-  const [isReady, setIsReady] = useState(false);
-  const [, setVersion] = useState(0);
+export function RiviumFlagsProvider({ config, client, children }: RiviumFlagsProviderProps) {
+  const [instance] = useState(() => {
+    if (client) return client;
+    if (!config) throw new Error('RiviumFlagsProvider needs `config` or `client`');
+    return new RiviumFlags(config);
+  });
 
   useEffect(() => {
-    client.init().then(() => {
-      setIsLoading(false);
-      setIsReady(true);
-    });
-  }, [client]);
+    if (client) return;
+    void instance.init();
+    return () => instance.close();
+  }, [instance, client]);
 
-  const isEnabled = useCallback(
-    (flagKey: string, defaultValue = false) => client.isEnabled(flagKey, defaultValue),
-    [client, isReady],
+  return <RiviumFlagsContext.Provider value={instance}>{children}</RiviumFlagsContext.Provider>;
+}
+
+/** What `useRiviumFlags()` returns. Functions are bound, so destructuring is safe. */
+export interface RiviumFlagsHook {
+  client: RiviumFlags;
+  isReady: boolean;
+  anonymousId: string;
+  userId: string | null;
+  isEnabled: RiviumFlags['isEnabled'];
+  getBoolean: RiviumFlags['getBoolean'];
+  getString: RiviumFlags['getString'];
+  getNumber: RiviumFlags['getNumber'];
+  getJson: RiviumFlags['getJson'];
+  getDetail: RiviumFlags['getDetail'];
+  getAll: RiviumFlags['getAll'];
+  identify: RiviumFlags['identify'];
+  setUserId: RiviumFlags['setUserId'];
+  setAttributes: RiviumFlags['setAttributes'];
+  reset: RiviumFlags['reset'];
+  resetAnonymousId: RiviumFlags['resetAnonymousId'];
+  refresh: RiviumFlags['refresh'];
+}
+
+/** The client from the nearest provider; re-renders the component when results change. */
+export function useRiviumFlags(): RiviumFlagsHook {
+  const client = useContext(RiviumFlagsContext);
+  if (!client) throw new Error('useRiviumFlags must be used within a RiviumFlagsProvider');
+  const version = useSyncExternalStore(
+    (cb) => client.subscribe(cb),
+    () => client.version,
+    () => client.version,
   );
-
-  const getValue = useCallback(
-    (flagKey: string, defaultValue?: any) => client.getValue(flagKey, defaultValue),
-    [client, isReady],
-  );
-
-  const evaluate = useCallback(
-    (flagKey: string) => client.evaluate(flagKey),
-    [client, isReady],
-  );
-
-  const getAll = useCallback(() => client.getAll(), [client, isReady]);
-
-  const setUserId = useCallback(
-    (userId: string) => client.setUserId(userId),
-    [client],
-  );
-
-  const getUserId = useCallback(() => client.getUserId(), [client]);
-
-  const setUserAttributes = useCallback(
-    (attributes: Record<string, any>) => client.setUserAttributes(attributes),
-    [client],
-  );
-
-  const refresh = useCallback(async () => {
-    await client.refresh();
-    setVersion((v) => v + 1);
-  }, [client]);
-
-  return (
-    <RiviumFlagsContext.Provider
-      value={{ isEnabled, getValue, evaluate, getAll, setUserId, getUserId, setUserAttributes, refresh, isLoading, isReady }}
-    >
-      {children}
-    </RiviumFlagsContext.Provider>
+  return useMemo(
+    () => ({
+      client,
+      isReady: client.isReady,
+      anonymousId: client.anonymousId,
+      userId: client.userId,
+      isEnabled: client.isEnabled.bind(client),
+      getBoolean: client.getBoolean.bind(client),
+      getString: client.getString.bind(client),
+      getNumber: client.getNumber.bind(client),
+      getJson: client.getJson.bind(client),
+      getDetail: client.getDetail.bind(client),
+      getAll: client.getAll.bind(client),
+      identify: client.identify.bind(client),
+      setUserId: client.setUserId.bind(client),
+      setAttributes: client.setAttributes.bind(client),
+      reset: client.reset.bind(client),
+      resetAnonymousId: client.resetAnonymousId.bind(client),
+      refresh: client.refresh.bind(client),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [client, version, client.userId, client.anonymousId],
   );
 }
 
-/**
- * useRiviumFlags - React Native hook for feature flags
- *
- * @example
- * ```tsx
- * import { useRiviumFlags } from '@rivium/flags-react-native';
- *
- * export function MyComponent() {
- *   const { isEnabled, isLoading } = useRiviumFlags();
- *
- *   if (isLoading) return <ActivityIndicator />;
- *
- *   return (
- *     <View>{isEnabled('new-feature') ? <NewFeature /> : <OldFeature />}</View>
- *   );
- * }
- * ```
- */
-export function useRiviumFlags(): RiviumFlagsContextValue {
-  const context = useContext(RiviumFlagsContext);
-  if (!context) {
-    throw new Error('useRiviumFlags must be used within a RiviumFlagsProvider');
-  }
-  return context;
+/** `isEnabled(key, defaultValue)`, re-rendering on change. */
+export function useFlagEnabled(key: string, defaultValue = false): boolean {
+  return useRiviumFlags().isEnabled(key, defaultValue);
+}
+
+export function useBooleanFlag(key: string, defaultValue: boolean): boolean {
+  return useRiviumFlags().getBoolean(key, defaultValue);
+}
+
+export function useStringFlag(key: string, defaultValue: string): string {
+  return useRiviumFlags().getString(key, defaultValue);
+}
+
+export function useNumberFlag(key: string, defaultValue: number): number {
+  return useRiviumFlags().getNumber(key, defaultValue);
+}
+
+export function useJsonFlag<T = unknown>(key: string, defaultValue: T): T {
+  return useRiviumFlags().getJson(key, defaultValue);
+}
+
+/** Value, enabled, variant, reason and version of one flag. */
+export function useFlagDetail<T = unknown>(key: string, defaultValue?: T): FlagDetail<T | unknown> {
+  return useRiviumFlags().getDetail(key, defaultValue);
 }
