@@ -1,6 +1,6 @@
 {
   "name": "@rivium/flags-react-native",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Rivium Flags for React Native - feature flags evaluated on the Rivium server, cached on the device",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

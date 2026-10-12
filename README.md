@@ -115,8 +115,9 @@ flags.onError((e) => console.log(e.statusCode, e.code, e.message));
 await flags.refresh(); // fetch now
 ```
 
-Results are fetched on `init()`, on `identify` / `setUserId` / `setAttributes`, when the app returns to the
-foreground and the last fetch is older than 15 minutes, and on `refresh()`. Optional polling while in the foreground:
+Results are fetched on `init()`, on `identify` / `setUserId` / `setAttributes` when the user or the attributes change
+(the same values again send no request), when the app returns to the foreground and the last fetch is older than
+15 minutes, and on `refresh()`. Optional polling while in the foreground:
 `refreshIntervalSeconds: 300` (default 0 = off, minimum 60). **Each fetch is a billed evaluation request**, which is
 why polling is off by default.
 

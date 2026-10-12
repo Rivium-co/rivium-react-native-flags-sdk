@@ -10,7 +10,7 @@ import type {
 } from './types';
 import { STORAGE_KEYS, defaultStorage, generateUuidV4 } from './storage';
 
-export const SDK_VERSION = '0.2.0';
+export const SDK_VERSION = '0.2.1';
 const DEFAULT_BASE_URL = 'https://flags.rivium.co';
 const DEBOUNCE_MS = 250;
 const FOREGROUND_STALE_MS = 15 * 60_000;
@@ -252,24 +252,33 @@ export class RiviumFlags {
   // Context
   // ---------------------------------------------------------------------------
 
-  /** Sets the user and (when given) replaces the attributes, then fetches (debounced 250 ms). */
+  /**
+   * Sets the user and (when given) replaces the attributes, then fetches (debounced 250 ms).
+   * Sends no request when the user and the attributes are the same as before and the results for them are
+   * already here (or on their way).
+   */
   identify(userId: string | null, attributes?: Attributes): Promise<void> {
+    this.ensureOpen();
+    const before = this.requestKey();
     this.setUser(userId);
     if (attributes) this._attributes = { ...attributes };
-    return this.contextChanged();
+    return this.contextChanged(before);
   }
 
-  /** Sets or clears the user id, then fetches (debounced). The previous user's results are dropped. */
+  /** Sets or clears the user id, then fetches (debounced) if it is another user, whose results are dropped. */
   setUserId(userId: string | null): Promise<void> {
+    this.ensureOpen();
+    const before = this.requestKey();
     this.setUser(userId);
-    return this.contextChanged();
+    return this.contextChanged(before);
   }
 
-  /** Replaces the targeting attributes, then fetches (debounced). */
+  /** Replaces the targeting attributes, then fetches (debounced) if their content changed. */
   setAttributes(attributes: Attributes): Promise<void> {
     this.ensureOpen();
+    const before = this.requestKey();
     this._attributes = { ...attributes };
-    return this.contextChanged();
+    return this.contextChanged(before);
   }
 
   /** Sign-out: clears user id, attributes and results; keeps the anonymous id; fetches. */
@@ -443,8 +452,30 @@ export class RiviumFlags {
     }
   }
 
-  private contextChanged(): Promise<void> {
+  /** The current request as a string (equal contexts give equal strings), or null when it cannot be encoded. */
+  private requestKey(): string | null {
+    try {
+      return canonicalJson(this.buildRequestBody());
+    } catch {
+      return null;
+    }
+  }
+
+  /** True when the stored results were fetched for exactly this request. */
+  private hasResultsFor(key: string | null): boolean {
+    return key !== null && this.flags !== null && this.cachedRequestKey === key;
+  }
+
+  /** Called after identify / setUserId / setAttributes; `before` is the request key from before the call. */
+  private contextChanged(before: string | null): Promise<void> {
     this.ensureOpen();
+    const key = this.requestKey();
+    if (key !== null && key === before) {
+      // Same user and attributes: never a second request for them.
+      if (this.debounceTimer) return new Promise<void>((resolve) => this.debounceWaiters.push(resolve));
+      if (this.inFlight && this.inFlightKey === key && this.inFlightGen === this.generation) return this.inFlight;
+      if (this.hasResultsFor(key)) return Promise.resolve();
+    }
     this.generation++;
     return new Promise<void>((resolve) => {
       this.debounceWaiters.push(resolve);
@@ -453,7 +484,9 @@ export class RiviumFlags {
         const waiters = this.debounceWaiters;
         this.debounceWaiters = [];
         this.debounceTimer = null;
-        this.fetchNow().finally(() => waiters.forEach((w) => w()));
+        // Changed and changed back, or already fetched by init(): the results for this context are here.
+        const next = this.hasResultsFor(this.requestKey()) ? Promise.resolve() : this.fetchNow();
+        next.finally(() => waiters.forEach((w) => w()));
       }, DEBOUNCE_MS);
     });
   }
